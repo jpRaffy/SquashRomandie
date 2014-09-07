@@ -1,0 +1,19 @@
+Club	Description
+ALC	Alcatraz Renens
+ATL	Gland 
+BIE	Bienne
+CCG	Country Club Geneva
+COL	Cologny
+CTG	City Green
+FRI	Fribourg
+GEN	Genève
+GRS	Green Squash Romanel
+GRU	Gruyère
+MAR	Marin
+MEY	Meyrin
+PAY	Payerne
+PUI	Puidoux
+SEN	Sense
+SIO	Sion
+UGE	Uni Genève
+YVE	Yverdon
