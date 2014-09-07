@@ -1,0 +1,835 @@
+---
+title: "Squash Romandie - Season 2013-2014"
+author: "Jean-Paul Raffy"
+copyright: jpRaffy
+date: "1 September 2014"
+keywords:
+  Squash
+  Romandie
+  Season
+  League
+  2013
+  2014
+  Insight
+output:
+  html_document:
+    fig_height: 4
+    theme: cosmo
+    toc: yes
+---
+
+
+```{r setoptions, echo=FALSE, results='hide', message=FALSE, warning=FALSE, error=FALSE}
+
+## Load the needed library for this R Markdown file
+library(dplyr)
+library(ggplot2)
+library(grid)
+library(knitr)
+library(reshape2)
+library(xtable)
+
+## Do not report numbers in scientific notation
+options(scipen = 999)
+
+## Always echo the R code in the chunks
+opts_chunk$set(cache=FALSE, echo=FALSE, results='markup', message=FALSE, warning=FALSE, error=FALSE)
+```
+
+
+### Introduction
+
+This study has been conducted during the second half of August 2014. Its purpose is to perform some data analysis on match results for the [Squash Romandie](http://squashromandie.ch) regional league of [squash](http://en.wikipedia.org/wiki/Squash_%28sport%29). **Squash Romandie (SR)** groups together 18 sports clubs mainly focused on squash and located in [Suisse romande](http://en.wikipedia.org/wiki/Suisse_romande), the French-speaking part of Switzerland.
+
+Every season, between the beginning of September and the end of June of next year, official matches, tournaments and interclubs are organised for licensed players of the **SR** organisation. Depending of the matches outcomes, points are awarded to the winning player and deducted from the loosing player's ranking, according of the ranking difference between the 2 players and the score.
+
+The data collected for this study from the [SR](http://squashromandie.ch) website, represents all the results for the 2013-2014 season as of **7 August 2014**.
+
+---
+
+
+### Data
+
+This study is based on 4 data files, collected from the website:
+
+1. `Clubs.txt` contains the 18 [clubs](http://squashromandie.ch/club), identified by their 3 letters codes
+2. `Players.txt` contains the [players](http://squashromandie.ch/player), identified by their last name, first name, license number and their club
+3. `Rankings.txt` contains the [rankings](http://squashromandie.ch/ranking/overall) for all licensed players, identified by their names, license number and club
+4. `Results.txt` contains the aggregated results for all the players. The following link shows the [results](http://squashromandie.ch/ranking/detail/4023) for the top-ranked player, identified by its license number 4023. Apart from the columns identifying the player that are self-explanatory, the other columns are described hereafter:
+
+    * `Date`: the day the match was played expressed as `dd.mm.yyyy`
+    * `Event`: the event when the match was played. Usually, a mini-league (intraclub match), a tournament or an interclub
+    * `Result`: the match outcome in plain text in French. *Bat* reprensents a win, and *Perd contre* represents a defeat
+    * `Score`: the score expresses the match outcome with the perspective of the listed player, and not his opponent. Matches are usually played to "best-of-five" (i.e. the first player to win three games)
+    * `Gain`: the number of points earned in case positive, or conceded otherwise
+    * `Points`: the ranking after the points under the `Gain` column have beed added or substracted from the previous ranking
+
+
+```{r loaddata}
+clubs <- read.table("./data/Clubs.txt", header = TRUE, sep = "\t", encoding = "UTF-8", as.is = TRUE)
+clubs$Club <- as.factor(clubs$Club)
+
+players <- read.table("./data/Players.txt", header = TRUE, sep = "\t", encoding = "UTF-8", as.is = TRUE)
+players$Club <- as.factor(players$Club)
+players <- cbind(players,
+                 Player = paste0(players$Last.Name, ", ", players$First.Name, " (", players$Club, ")"))
+
+rankings <- read.table("./data/Rankings.txt", header = TRUE, sep = "\t", encoding = "UTF-8", as.is = TRUE)
+rankings$Club <- as.factor(rankings$Club)
+rankings <- cbind(rankings,
+                  Player = paste0(rankings$Last.Name, ", ", rankings$First.Name, " (", rankings$Club, ")"))
+
+results <- read.table("./data/Results.txt", header = TRUE, sep = "\t", encoding = "UTF-8", as.is = TRUE)
+results$Club <- as.factor(results$Club)
+results <- cbind(results,
+                 Player = paste0(results$Last.Name, ", ", results$First.Name, " (", results$Club, ")"))
+```
+<br>
+
+
+Line samples of these 4 data files are given below:
+<br>
+
+First 3 clubs from the `Clubs.txt` data file:
+
+```{r printsampleclubs, results='asis'}
+print(xtable(head(clubs, 3)), type = "html")
+```
+<br>
+
+First 3 players from the `Players.txt` data file:
+
+```{r printsampleplayers, results='asis'}
+print(xtable(head(players, 3)), type = "html")
+```
+<br>
+
+First 3 rankings from the `Rankings.txt` data file:
+
+```{r printsamplerankings, results='asis'}
+print(xtable(head(rankings, 3)), type = "html")
+```
+<br>
+
+First 3 results from the `Results.txt` data file:
+
+```{r printsampleresults, results='asis'}
+print(xtable(head(results, 3)), type = "html")
+```
+
+---
+
+
+### Clubs & Players
+
+#### **Who's who**
+
+As of **7 August 2014**, there were **`r nrow(clubs)`** clubs with a total number of **`r nrow(players)`** licensed players. For more clarity over this study, colours have been assigned to each club, as much as possible inspired by their colour identity. The clubs and respective colours are shown below:
+
+```{r clubs, results='markup', fig.height=4, fig.width=7}
+clubs <- cbind(clubs,
+               Colour = c("darkgrey", "gold", "royalblue1",
+                          "red", "lightblue", "greenyellow",
+                          "rosybrown", "skyblue1", "lawngreen",
+                          "palevioletred", "lavender", "steelblue",
+                          "orangered", "indianred", "mediumseagreen",
+                          "limegreen", "magenta", "darkolivegreen3"),
+               xmin = rep(0:2, 6),
+               xmax = rep(1:3, 6),
+               ymin = rep(5:0, each = 3),
+               ymax = rep(6:1, each = 3))
+clubs$Colour <- as.character(clubs$Colour)
+ggplot(clubs) +
+        geom_rect(mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin,
+                                ymax = ymax, fill = Club)) +
+        geom_text(aes(x = xmin + (xmax - xmin) / 2, y = ymin + (ymax - ymin) / 2,
+                      label = Description), size = 3) +
+        guides(fill = guide_legend(ncol = 2)) +
+        labs(x = "", y = "", title = "Squash Romandie Clubs") +
+        scale_fill_manual(values = clubs$Colour) +
+        scale_x_continuous(expand = c(0, 0)) + 
+        scale_y_continuous(expand = c(0, 0)) +
+        theme(panel.background = element_rect(fill = "white", colour = "black"),
+              axis.text.x = element_blank(), axis.text.y = element_blank(),
+              axis.ticks = element_blank(),
+              legend.text = element_text(size = 8),
+              legend.key.size = unit(0.5, "cm"))
+```
+
+
+#### **Who's where**
+
+The following chart lists the clubs according to their **SR** licensed players, from most to least important:
+
+```{r playersbyclubs, results='markup', fig.height=4, fig.width=7}
+df <- tbl_df(players)
+df <- arrange(summarise(group_by(df, Club), Event = n()), desc(Event))
+df <- merge(df, clubs[, 1:3], by = "Club")
+df$Club <- factor(df$Club, levels = df$Club, ordered = TRUE)
+ggplot(df, aes(x = reorder(Club, Event), y = Event, fill = Club)) +
+        geom_bar(stat = "identity") +
+        geom_text(aes(y = Event, label = Event), size = 3) +
+        guides(fill = guide_legend(ncol = 2)) +
+        labs(x = "", y = "", title = "Licensed Players by Club") +
+        scale_fill_manual(values = df$Colour) +
+        coord_flip() +
+        theme(panel.background = element_rect(fill = "white", colour = "black"),
+              text = element_text(size = 10),
+              legend.text = element_text(size = 8),
+              legend.key.size = unit(0.5, "cm"))
+```
+
+
+#### **Who's strong**
+
+In the following chart, the clubs are compared in terms of density of rankings. The tiny horizontal black segments in each box reprensent the median ranking for the licensed player in each club. Orange dots represent the outlying points in each density. Notice that the **UGE** club with **7** licensed players has no rankings, as it has recently opened.
+
+```{r dentitybyrankings, results='markup', fig.height=4, fig.width=7}
+ggplot(rankings, aes(Club, Points)) +
+        geom_boxplot(aes(fill = Club), outlier.colour = "orangered", outlier.size = 2) +
+        guides(fill = guide_legend(ncol = 2)) +
+        labs(x = "", y = "", title = "Density of Rankings by Clubs") +
+        scale_fill_manual(values = clubs$Colour) +
+        theme(panel.background = element_rect(fill = "white", colour = "black"),
+              text = element_text(size = 10),
+              legend.text = element_text(size = 8),
+              legend.key.size = unit(0.5, "cm"))
+```
+
+
+The following chart lists the clubs according to the average weight of their licensed players. This helps to identify which clubs concentrate top-ranking players. It is interesting to note that here again, the **UGE** club has an average ranking of **0**.
+
+```{r clubsbyrelweight, results='markup', fig.height=4, fig.width=7}
+df <- tbl_df(rankings)
+df <- arrange(summarise(group_by(df, Club), Event = n(), Total = sum(Points),
+                        Average = round(Total / Event, 0)), desc(Average))
+df <- merge(df, clubs[, 1:3], by = "Club")
+df$Club <- factor(df$Club, levels = df$Club, ordered = TRUE)
+ggplot(df, aes(x = reorder(Club, Average), y = Average, fill = Club)) +
+        geom_bar(stat = "identity") +
+        geom_text(aes(y = Average, label = Average), size = 3) +
+        guides(fill = guide_legend(ncol = 2)) +
+        labs(x = "", y = "", title = "Relative Rankings by Club for All Players") +
+        scale_fill_manual(values = df$Colour) +
+        coord_flip() +
+        theme(panel.background = element_rect(fill = "white", colour = "black"),
+              text = element_text(size = 10),
+              legend.text = element_text(size = 8),
+              legend.key.size = unit(0.5, "cm"))
+```
+
+
+#### **Who's most active**
+
+It is important to highlight that not all licensed players actually engage in **SR** competitions. Indeed, there are **`r nrow(results[!complete.cases(results), ])`** out of **`r nrow(players)`** players that never participated to an event over the 2013-2014 season. Excluding these "inactive" players, gives another interesting perspective to the average weight of **active** licensed players by club:
+
+```{r clubsbyrelweightnona, results='markup', fig.height=4, fig.width=7}
+noresults <- unique(results[!complete.cases(results), ]$License)
+df <- tbl_df(rankings[!(rankings$License %in% noresults), ])
+df <- arrange(summarise(group_by(df, Club), Event = n(), Total = sum(Points),
+                        Average = round(Total / Event, 0)), desc(Average))
+df <- merge(df, clubs[, 1:3], by = "Club")
+df$Club <- factor(df$Club, levels = df$Club, ordered = TRUE)
+ggplot(df, aes(x = reorder(Club, Average), y = Average, fill = Club)) +
+        geom_bar(stat = "identity") +
+        geom_text(aes(y = Average, label = Average), size = 3) +
+        guides(fill = guide_legend(ncol = 2)) +
+        labs(x = "", y = "", title = "Relative Rankings by Club for Active Players") +
+        scale_fill_manual(values = df$Colour) +
+        coord_flip() +
+        theme(panel.background = element_rect(fill = "white", colour = "black"),
+              text = element_text(size = 10),
+              legend.text = element_text(size = 8),
+              legend.key.size = unit(0.5, "cm"))
+```
+
+
+#### **Who's least active**
+
+Let's find out in which clubs and how many by club, are these licensed players who never engaged in any **SR** competition over the 2013-2014 season. This is shown in the following chart:
+
+```{r inactiveplayers, results='markup', fig.height=4, fig.width=7}
+df <- tbl_df(results[!complete.cases(results), ])
+df <- arrange(summarise(group_by(df, Club), Event = n()), desc(Event))
+df <- merge(df, clubs[, 1:3], by = "Club")
+df$Club <- factor(df$Club, levels = df$Club, ordered = TRUE)
+ggplot(df, aes(x = Club, y = Event, fill = Club)) +
+        geom_point(aes(size = Event), pch = 21) +
+        geom_text(aes(y = Event, label = Event), size = 5, colour = "black") +
+        guides(fill = guide_legend(ncol = 2), size = "none") +
+        labs(x = "", y = "", title = "Inactive Players by Club") +
+        scale_fill_manual(values = df$Colour) +
+        scale_size(range = c(5, 35)) +
+        expand_limits(x = c(0, 17), y = c(-2, 55)) +
+        theme(panel.background = element_rect(fill = "white", colour = "black"),
+              text = element_text(size = 10),
+              legend.text = element_text(size = 8),
+              legend.key.size = unit(0.5, "cm"))
+```
+
+
+#### **Who's played a lot**
+
+On the other side of the spectrum, and amongst the **`r nrow(results[complete.cases(results), ])`** recorded matches, the 10 most active players over the season are listed in the table below:
+
+```{r eventsbyplayer, results='asis'}
+df <- tbl_df(results)
+df <- df %>% 
+        group_by(Player, Ranking) %>%
+        summarise(Event = n()) %>%
+        arrange(desc(Event))
+print(xtable(head(df, 10)), type = "html")
+```
+<br>
+
+
+Subsequently, the most active clubs are summarised in the following chart:
+
+```{r eventsbyclub, results='markup', fig.height=4, fig.width=7}
+df <- tbl_df(results[complete.cases(results), ])
+df <- arrange(summarise(group_by(df, Club), Event = n()), desc(Event))
+df <- merge(df, clubs[, 1:3], by = "Club")
+df$Club <- factor(df$Club, levels = df$Club, ordered = TRUE)
+ggplot(df, aes(x = reorder(Club, Event), y = Event, fill = Club)) +
+        geom_bar(stat = "identity") +
+        geom_text(aes(y = Event, label = Event), size = 3) +
+        guides(fill = guide_legend(ncol = 2)) +
+        labs(x = "", y = "", title = "Events by Club") +
+        scale_fill_manual(values = df$Colour) +
+        coord_flip() +
+        theme(panel.background = element_rect(fill = "white", colour = "black"),
+              text = element_text(size = 10),
+              legend.text = element_text(size = 8),
+              legend.key.size = unit(0.5, "cm"))
+```
+
+
+```{r statsbyplayer, results='asis'}
+dfind <- tbl_df(results)
+dfind <- dfind %>%
+        group_by(Player, Ranking, Club, License) %>%
+        summarise(Event = n(),
+                  Total = round(sum(Gain), 2),
+                  Average = round(Total / Event, 2),
+                  Start = strftime(min(as.Date(Date, "%d.%m.%Y"))),
+                  End = strftime(max(as.Date(Date, "%d.%m.%Y"))),
+                  Days = 0L,
+                  Initial = 0,
+                  Final = 0,
+                  Performance = 0,
+                  Win = 0L,
+                  Loss = 0L,
+                  Penalty = 0L,
+                  Max = 0,
+                  Min = 0)
+dfind$Days <- as.integer(as.Date(dfind$End) - as.Date(dfind$Start) + 1)
+dfind$Final <- round(dfind$Ranking, 2)
+dfind$Initial <- round(dfind$Ranking - dfind$Total, 2)
+dfind$Performance <- round((dfind$Final - dfind$Initial) / dfind$Initial, 2)
+for (i in 1:nrow(players))
+{
+        dftemp <- subset(results, grepl(players[i, ]$License, results$License, ignore.case = TRUE))
+        dftemp <- dftemp[complete.cases(dftemp), ]
+        if (nrow(dftemp) > 0 )
+        {
+                dfind[dfind$License == players[i, ]$License, ]$Win <-
+                        nrow(dftemp[grep("^Bat ", dftemp$Result, ignore.case = TRUE), ])
+                dfind[dfind$License == players[i, ]$License, ]$Loss <-
+                        nrow(dftemp[grep("^Perd contre ", dftemp$Result, ignore.case = TRUE), ])
+                dfind[dfind$License == players[i, ]$License, ]$Penalty <-
+                        nrow(dftemp[grep(" -6", dftemp$Result, ignore.case = TRUE), ])
+                dfind[dfind$License == players[i, ]$License, ]$Max <-
+                        max(dftemp$Points)
+                dfind[dfind$License == players[i, ]$License, ]$Min <-
+                        min(dftemp$Points)
+        }
+}
+```
+
+
+```{r statsbyclub, results='asis'}
+dfglob <- tbl_df(results[complete.cases(results), ])
+dfagg <- unique(dfglob[, c(3, 4)])
+dfagg <- aggregate(dfagg$Ranking, by = list(factor(dfagg$Club)), FUN = sum)
+dfglob <- summarise(group_by(dfglob, Club),
+                    Event = n(),
+                    Total = round(sum(Gain, na.rm = TRUE), 2),
+                    Average = round(Total / Event, 2),
+                    Start = min(as.Date(Date, "%d.%m.%Y")),
+                    End = max(as.Date(Date, "%d.%m.%Y")),
+                    Days = 0L,
+                    Initial = 0,
+                    Final = 0,
+                    Performance = 0)
+dfglob$Days <- as.integer(as.Date(dfglob$End) - as.Date(dfglob$Start) + 1)
+dfglob <- merge(dfglob, dfagg, by.x = "Club", by.y = "Group.1")
+dfglob$Final <- round(dfglob$x, 2)
+dfglob$Initial <- round(dfglob$x - dfglob$Total, 2)
+dfglob$Performance <- round((dfglob$Final - dfglob$Initial) / dfglob$Initial, 2)
+dfglob[, ncol(dfglob)] <- NULL
+```
+
+
+#### **Who’s earned most points on average**
+
+Let's now consider the top-10 players with the best average gained points per event. The `Total` column shows the number of earned points by a player over the season, with the number of event to which he/she has participated, under the `Count` column. 
+
+```{r bestmeanbyplayer, results='asis'}
+dftemp <- dfind %>% arrange(desc(Average))
+print(xtable(head(dftemp[, c(1, 8:9, 6, 5, 7)], 10)), type = "html")
+```
+<br>
+
+
+Looking at the previous statistic per player, the following chart gives the best average gained points by event and by club:
+
+```{r bestmeanbyclub, results='asis'}
+dftemp <- dfglob %>% arrange(desc(Average))
+dftemp <- merge(dftemp, clubs[, 1:3], by = "Club")
+dftemp$Club <- factor(dftemp$Club, levels = dftemp$Club, ordered = TRUE)
+ggplot(dftemp, aes(x = reorder(Club, Average), y = Average, fill = Club)) +
+        geom_bar(stat = "identity") +
+        geom_text(aes(y = Average, label = Average), size = 3) +
+        guides(fill = guide_legend(ncol = 2)) +
+        labs(x = "", y = "", title = "Average Points Earned by Event and by Club") +
+        scale_fill_manual(values = dftemp$Colour) +
+        coord_flip() +
+        theme(panel.background = element_rect(fill = "white", colour = "black"),
+              text = element_text(size = 10),
+              legend.text = element_text(size = 8),
+              legend.key.size = unit(0.5, "cm"))
+```
+
+
+#### **Top performers**
+
+To rank the players by performance, the `Initial`, `Final`and `Performance` columns are added to the summarised data. The `Performance` is calculated with the `(Final - Initial) / Initial` formula, and expressed raw and not in percent. The following table lists the top-10 performers over the season, while excluding players with initial starting points below 10, in order to avoid abnormally high values, obtained when `Initial` is near 0.
+
+```{r bestperfbyplayer, results='asis'}
+dftemp <- dfind %>% arrange(desc(Performance)) %>% filter(Initial >= 10 & Performance != Inf)
+print(xtable(head(dftemp[, c(1, 8:9, 11:12, 6, 13)], 10)), type = "html")
+```
+<br>
+
+
+To rank the clubs by performance, the same principle applied above is performed at the clubs' summarised data. Again, the `Performance` is expressed in raw terms and not in percent.
+
+```{r bestperfbyclub, results='asis'}
+dftemp <- dfglob %>% arrange(desc(Performance))
+dftemp <- merge(dftemp, clubs[, 1:3], by = "Club")
+dftemp$Club <- factor(dftemp$Club, levels = dftemp$Club, ordered = TRUE)
+ggplot(dftemp, aes(x = reorder(Club, Performance), y = Performance, fill = Club)) +
+        geom_bar(stat = "identity") +
+        geom_text(aes(y = Performance, label = Performance), size = 3) +
+        guides(fill = guide_legend(ncol = 2)) +
+        labs(x = "", y = "", title = "Performance by Club") +
+        scale_fill_manual(values = dftemp$Colour) +
+        coord_flip() +
+        theme(panel.background = element_rect(fill = "white", colour = "black"),
+              text = element_text(size = 10),
+              legend.text = element_text(size = 8),
+              legend.key.size = unit(0.5, "cm"))
+```
+
+
+#### **Unbeatables...**
+
+Let's find out now all the players who never lost a match over the season. The following table lists the number of wins under the `Win` column and the number of elapsed days between the first and last event's dates under the `Days` column. The column `Frequency` is calculated according to the `(Win / Days) * 100` formula, indicating many wins over a short period of time, when the value is high. The wins and frequencies are then displayed in a chart, below the table:
+
+```{r onlywinners, results='asis', fig.height=4, fig.width=7}
+dftemp <- dfind %>% arrange(desc(Win)) %>% filter(Days > 1 & Win > 0 & Loss == 0)
+dftemp <- cbind(dftemp, Frequency = round((dftemp$Win / dftemp$Days) * 100, 2))
+print(xtable(dftemp[, c(1, 10, 5, 14:15, ncol(dftemp))]), type = "html")
+dftemp$Player <- factor(dftemp$Player, levels = dftemp$Player, ordered = TRUE)
+dftemp <- melt(dftemp, id = c("Player"), measure.vars = c("Win", "Frequency"))
+ggplot(dftemp, aes(x = Player, y = value, fill = Player)) +
+        geom_bar(stat = "identity") +
+        geom_text(aes(y = value, label = value), size = 3) +
+        facet_wrap(~ variable) +
+        labs(x = "", y = "", title = "Wins and their Frequencies for Never Beaten Players") +
+        coord_flip() +
+        theme(panel.background = element_rect(fill = "white", colour = "black"),
+              text = element_text(size = 10),
+              legend.position = "none")
+```
+
+
+#### **... and beatables**
+
+Symmetrically, the following table and chart list all the players who never won a match over the season. The following table lists the number of losses under the `Loss` column. The column `Frequency` is calculated according to the `(Loss / Days) * 100` formula, indicating many losses over a short period of time, when the value is high. The losses and frequencies are then displayed in a chart, below the table:
+
+```{r onlyloosers, results='asis', fig.height=5, fig.width=7}
+dftemp <- dfind %>% arrange(desc(Loss)) %>% filter(Days > 1 & Loss > 0 & Win == 0)
+dftemp <- cbind(dftemp, Frequency = round((dftemp$Loss / dftemp$Days) * 100, 2))
+print(xtable(dftemp[, c(1, 10, 5, 14:15, ncol(dftemp))]), type = "html")
+dftemp$Player <- factor(dftemp$Player, levels = dftemp$Player, ordered = TRUE)
+dftemp <- melt(dftemp, id = c("Player"), measure.vars = c("Loss", "Frequency"))
+ggplot(dftemp, aes(x = Player, y = value, fill = Player)) +
+        geom_bar(stat = "identity") +
+        geom_text(aes(y = value, label = value), size = 3) +
+        facet_wrap(~ variable) +
+        labs(x = "", y = "", title = "Losses and their Frequencies for Always Beaten players") +
+        coord_flip() +
+        theme(panel.background = element_rect(fill = "white", colour = "black"),
+              text = element_text(size = 10),
+              legend.position = "none")
+```
+
+
+#### **Winners & loosers**
+
+The top-5 winners and top-5 loosers in terms of earned points are shown in the following chart:
+
+```{r winnersandloosers, results='asis', fig.height=4, fig.width=7}
+dftemp <- dfind %>% arrange(Total) %>% filter((Win + Loss > 0) & Event > 0)
+dftemp <- dftemp[c(1:5, (nrow(dftemp) - 4):nrow(dftemp)), ]
+dftemp <- cbind(dftemp, Positive = ifelse(dftemp$Total >= 0, TRUE, FALSE))
+dftemp$Player <- factor(dftemp$Player, levels = dftemp$Player, ordered = TRUE)
+ggplot(dftemp, aes(x = reorder(Player, Total), y = Total, fill = Positive)) +
+        geom_bar(stat = "identity") +
+        geom_text(aes(y = Total, label = Total), size = 3) +
+        labs(x = "", y = "", title = "Top 5 Winners and Loosers") +
+        scale_fill_manual(values = c("red", "green")) +
+        coord_flip() +
+        theme(panel.background = element_rect(fill = "white", colour = "black"),
+              text = element_text(size = 10),
+              legend.position = "none")
+```
+
+
+#### **And the winner is...**
+
+The following chart displays the ranking's evolution over the season for the top winner. The horizontal and vertical dotted lines indicate when the maximum ranking was reached. The statistics above the chart are described as follows:
+
+* `P`: number of event **P**layed
+* `W`: number of **W**ins
+* `L`: number of **L**osses
+* `Pn`: number of points lost due to **P**e**n**alities
+* `Pt`: number of **P**oin**t**s earned
+* `M`: **M**aximum ranking reached over the season
+* `m`: **m**inimum ranking reached over the season
+
+```{r winnervariationchart, results='asis', fig.height=5, fig.width=7}
+dftemp <- dfind %>% arrange(desc(Total)) %>% filter((Win + Loss > 0) & Event > 0)
+dftemp <- subset(results, grepl(dftemp[1, ]$License, results$License, ignore.case = TRUE))
+dftemp <- dftemp[complete.cases(dftemp), ]
+dftemp$Date <- as.Date(dftemp$Date, "%d.%m.%Y")
+colour <- clubs[clubs$Club == dftemp[1, ]$Club, ]$Colour
+if (nrow(dftemp) > 0 )
+{
+        dftemp <- rbind(dftemp, dftemp[nrow(dftemp), ])
+        dftemp[nrow(dftemp), ]$Event <- dftemp[nrow(dftemp), ]$Result <- dftemp[nrow(dftemp), ]$Score <- ""
+        dftemp[nrow(dftemp), ]$Gain <- 0
+        dftemp[nrow(dftemp), ]$Points <- dftemp[nrow(dftemp) - 1, ]$Points - dftemp[nrow(dftemp) - 1, ]$Gain
+}
+dftemp <- dftemp[order(nrow(dftemp):1), ]
+P <- nrow(dftemp) - 1
+W <- nrow(dftemp[grep("^Bat ", dftemp$Result, ignore.case = TRUE), ])
+L <- nrow(dftemp[grep("^Perd contre ", dftemp$Result, ignore.case = TRUE), ])
+Pn <- nrow(dftemp[grep(" -6", dftemp$Result, ignore.case = TRUE), ])
+Pt <- sum(dftemp$Gain)
+M <- max(dftemp$Points)
+m <- min(dftemp$Points)
+stat <- paste0("P: ", P, " | W: ", W, " | L: ", L, " | Pn: ", Pn, " | Pt: ", Pt, " | M: ", M, " | m: ", m)
+ggplot(data = dftemp, aes(x = Date, y = Points)) +
+        geom_line(colour = colour, size = 1.25) +
+        geom_point() +
+        ggtitle(paste0(unique(dftemp$Player), " - ", unique(dftemp$Ranking))) +
+        geom_hline(yintercept = max(dftemp$Points), colour = "black", linetype = "dotted") +
+        geom_vline(xintercept = as.numeric(min(dftemp[dftemp$Points == max(dftemp$Points), ]$Date)),
+                   colour = "black", linetype = "dotted") +
+        annotate("text", x = mean(range(dftemp$Date)), y = Inf, label = stat, vjust = 1.5, size = 4) +
+        theme(panel.background = element_rect(fill = "white", colour = "black"),
+              text = element_text(size = 10),
+              legend.position = "none")
+```
+
+
+#### **Who to bet your money on?**
+
+The following table gathers the top-20 confrontations by couple of players, with the total of matches listed under the `Count` column, the number of wins under the `Win` column and the number of losses under the `Loss` column:
+
+```{r mostfrequentconfr, results='asis'}
+dfconfr <- data.frame(FromLN = character(), FromFN = character(), FromPlayer = character(),
+                      ToLN = character(), ToFN = character(), ToPlayer = character(),
+                      Date = character(), Result = character(), WL = integer(), Keep = logical(),
+                      stringsAsFactors = FALSE)
+for (i in 1:nrow(players))
+{
+        dftemp <- subset(results, grepl(players[i, ]$Last.Name, results$Result, ignore.case = TRUE))
+        dftemp <- subset(dftemp, grepl(players[i, ]$First.Name, dftemp$Result, ignore.case = TRUE))
+        if (nrow(dftemp) > 0)
+        {
+                keep <- as.character(players[i, ]$Player) < as.character(dftemp$Player)
+                dfconfr <- rbind(dfconfr,
+                                 unique(cbind(players[i, ]$Last.Name, players[i, ]$First.Name, players[i, ]$Player,
+                                              dftemp[, c(1, 2, 12, 6, 8)], -1, keep)))
+        }
+}
+dfconfr[grep("^Perd contre ", dfconfr$Result, ignore.case = TRUE), 9] <- 1
+colnames(dfconfr) <- c("FromLN", "FromFN", "FromPlayer", "ToLN", "ToFN", "ToPlayer",
+                       "Date", "Result", "WL", "Keep")
+dfconfr <- dfconfr[dfconfr$Keep == TRUE, ]
+dfconfr <- tbl_df(dfconfr)
+dfmatches <- summarise(group_by(dfconfr, FromPlayer, ToPlayer), Count = n(), Win = 0L, Loss = 0L)
+dfWL <- summarise(group_by(dfconfr, FromPlayer, ToPlayer, WL), Count = n())
+for (i in 1:nrow(dfmatches))
+{
+        dftemp <- dfWL[dfWL$FromPlayer == dfmatches[i, ]$FromPlayer & dfWL$ToPlayer == dfmatches[i, ]$ToPlayer, ]
+        if (nrow(dftemp[dftemp$WL == -1, ]))
+        {
+                dfmatches[i, ]$Loss <- dftemp[dftemp$WL == -1, ]$Count
+        }
+        if (nrow(dftemp[dftemp$WL == 1, ]))
+        {
+                dfmatches[i, ]$Win <- dftemp[dftemp$WL == 1, ]$Count
+        }
+}
+dfmatches <- arrange(dfmatches, desc(Count))
+print(xtable(head(dfmatches, 20)), type = "html")
+```
+<br>
+
+
+#### **No-shows**
+
+Players that do not show at events they are registered to, are penalised and loose 6 points. The table below shows the penalties over the season:
+
+```{r penalizedplayers, results='asis'}
+dftemp <- dfind %>% arrange(desc(Event)) %>% filter(Event > 0 & Penalty > 0)
+print(xtable(head(dftemp[, c(1, 8:10, 5, 16)], 10)), type = "html")
+```
+
+---
+
+
+### Interclubs
+
+Each season, [interclub](http://squashromandie.ch/interclub) matches are organised by leagues. For the 2013-2014 season, there were 6 different leagues with approximately 7 teams by league, entered by their respective clubs:
+
+* Super Ligue
+* Ligue 1
+* Ligue 2 Ouest
+* Ligue 2 Est
+* Ligue 3 Ouest
+* Ligue 3 Est
+
+Each team is composed of 4 players, and may be mixed (male & female). Encounters are organised to be played at home and away, each player of receiving team playing another player of the visiting team, according to rankings. The 4 matches results are aggregated resulting in the following outcomes:
+
+* G: Win *(Gagné)*
+* E+ : Winning draw (games) *(Gagné (sets))*
+* E : Draw *(Egalité)*
+* P : Loss *(Perdu)*
+
+Players of the same club may be part of more than 1 team, thus resulting in more interclub results at an individual level. Also, matches played during the Interclub season, contribute to the players' individual rankings.
+
+
+```{r statsbyplayerinter, results='asis'}
+dfind <- tbl_df(subset(results, grepl("Interclub", results$Event, ignore.case = TRUE)))
+dfind <- dfind %>%
+        group_by(Player, Ranking, Club, License) %>%
+        summarise(Event = n(),
+                  Total = round(sum(Gain), 2),
+                  Average = round(Total / Event, 2),
+                  Start = strftime(min(as.Date(Date, "%d.%m.%Y"))),
+                  End = strftime(max(as.Date(Date, "%d.%m.%Y"))),
+                  Days = 0L,
+                  Initial = 0,
+                  Final = 0,
+                  Performance = 0,
+                  Win = 0L,
+                  Loss = 0L,
+                  WLRatio = 0)
+dfind$Days <- as.integer(as.Date(dfind$End) - as.Date(dfind$Start) + 1)
+dfind$Final <- round(dfind$Ranking, 2)
+dfind$Initial <- round(dfind$Ranking - dfind$Total, 2)
+dfind$Performance <- round((dfind$Final - dfind$Initial) / dfind$Initial, 2)
+dfplayers <- players[players$License %in% unique(dfind$License), ]
+for (i in 1:nrow(dfplayers))
+{
+        dftemp <- subset(results, grepl(dfplayers[i, ]$License, results$License, ignore.case = TRUE))
+        dftemp <- subset(dftemp, grepl("Interclub", dftemp$Event, ignore.case = TRUE))
+        dftemp <- dftemp[complete.cases(dftemp), ]
+        if (nrow(dftemp) > 0 )
+        {
+                dfind[dfind$License == dfplayers[i, ]$License, ]$Win <-
+                        nrow(dftemp[grep("^Bat ", dftemp$Result, ignore.case = TRUE), ])
+                dfind[dfind$License == dfplayers[i, ]$License, ]$Loss <-
+                        nrow(dftemp[grep("^Perd contre ", dftemp$Result, ignore.case = TRUE), ])
+                if (dfind[dfind$License == dfplayers[i, ]$License, ]$Win == 0)
+                {
+                        dfind[dfind$License == dfplayers[i, ]$License, ]$WLRatio <-
+                                dfind[dfind$License == dfplayers[i, ]$License, ]$Loss / -1
+                } else if (dfind[dfind$License == dfplayers[i, ]$License, ]$Loss == 0)
+                {
+                        dfind[dfind$License == dfplayers[i, ]$License, ]$WLRatio <-
+                                dfind[dfind$License == dfplayers[i, ]$License, ]$Win / 1
+                } else
+                {
+                        dfind[dfind$License == dfplayers[i, ]$License, ]$WLRatio <-
+                                dfind[dfind$License == dfplayers[i, ]$License, ]$Win /
+                                       dfind[dfind$License == dfplayers[i, ]$License, ]$Loss
+                }
+                dfind[dfind$License == dfplayers[i, ]$License, ]$WLRatio <-
+                        round(dfind[dfind$License == dfplayers[i, ]$License, ]$WLRatio, 2)
+        }
+}
+```
+
+
+```{r statsbyclubinter, results='asis'}
+dfglob <- tbl_df(subset(results, grepl("Interclub", results$Event, ignore.case = TRUE)))
+dfagg <- unique(dfglob[, c(3, 4)])
+dfagg <- aggregate(dfagg$Ranking, by = list(factor(dfagg$Club)), FUN = sum)
+dfglob <- summarise(group_by(dfglob, Club),
+                    Event = n(),
+                    Total = round(sum(Gain, na.rm = TRUE), 2),
+                    Average = round(Total / Event, 2),
+                    Start = min(as.Date(Date, "%d.%m.%Y")),
+                    End = max(as.Date(Date, "%d.%m.%Y")),
+                    Days = 0L,
+                    Initial = 0,
+                    Final = 0,
+                    Performance = 0,
+                    Win = 0L,
+                    Loss = 0L,
+                    WLRatio = 0)
+dfglob$Days <- as.integer(as.Date(dfglob$End) - as.Date(dfglob$Start) + 1)
+dfglob <- merge(dfglob, dfagg, by.x = "Club", by.y = "Group.1")
+dfglob$Final <- round(dfglob$x, 2)
+dfglob$Initial <- round(dfglob$x - dfglob$Total, 2)
+dfglob$Performance <- round((dfglob$Final - dfglob$Initial) / dfglob$Initial, 2)
+dfglob[, ncol(dfglob)] <- NULL
+dfclubs <- clubs[clubs$Club %in% unique(dfglob$Club), ]
+for (i in 1:nrow(dfclubs))
+{
+        dftemp <- results[results$Club == dfclubs[i, ]$Club, ]
+        dftemp <- subset(dftemp, grepl("Interclub", dftemp$Event, ignore.case = TRUE))
+        dftemp <- dftemp[complete.cases(dftemp), ]
+        if (nrow(dftemp) > 0 )
+        {
+                dfglob[dfglob$Club == dfclubs[i, ]$Club, ]$Win <-
+                        nrow(dftemp[grep("^Bat ", dftemp$Result, ignore.case = TRUE), ])
+                dfglob[dfglob$Club == dfclubs[i, ]$Club, ]$Loss <-
+                        nrow(dftemp[grep("^Perd contre ", dftemp$Result, ignore.case = TRUE), ])
+                if (dfglob[dfglob$Club == dfclubs[i, ]$Club, ]$Win == 0)
+                {
+                        dfglob[dfglob$Club == dfclubs[i, ]$Club, ]$WLRatio <-
+                                dfglob[dfglob$Club == dfclubs[i, ]$Club, ]$Loss / -1
+                } else if (dfglob[dfglob$Club == dfclubs[i, ]$Club, ]$Loss == 0)
+                {
+                        dfglob[dfglob$Club == dfclubs[i, ]$Club, ]$WLRatio <-
+                                dfglob[dfglob$Club == dfclubs[i, ]$Club, ]$Win / 1
+                } else
+                {
+                        dfglob[dfglob$Club == dfclubs[i, ]$Club, ]$WLRatio <-
+                                dfglob[dfglob$Club == dfclubs[i, ]$Club, ]$Win /
+                                       dfglob[dfglob$Club == dfclubs[i, ]$Club, ]$Loss
+                }
+                dfglob[dfglob$Club == dfclubs[i, ]$Club, ]$WLRatio <-
+                        round(dfglob[dfglob$Club == dfclubs[i, ]$Club, ]$WLRatio, 2)
+        }
+}
+```
+<br>
+
+
+#### **Players you want in your teams...**
+
+The following table show the top-10 best performers in interclubs encounters. The `Event` column displays the number of played matches, the `Win` column displays the winned matches and `Loss` the lost ones. The last column `WLRatio` is a Win / Loss Ratio, calculated according to the following formula: `Win / Loss` (if `Loss` ≠ `0`), `Win / 1` (if `Loss` = `0`) and `Loss / -1` (if `Win` = `0`).
+
+In doing so, a high Win / Loss Ratio indicates many wins over little or no losses. A Win / Loss Ratio near 1 indicates more or less as many wins as losses. And, a negative low Win / Loss Ratio indicates many losses over little or no wins.
+
+```{r topcontrtointer, results='asis'}
+dftemp <- dfind %>% arrange(desc(WLRatio), desc(Performance))
+print(xtable(head(dftemp[, c(1, 3, 11:13, 5, 14:16)], 10)), type = "html")
+```
+<br>
+
+
+#### **Players you don't really want in your teams...**
+
+Subsequently, the top-10 worst performers in interclubs encounters, according to the Win / Loss Ratio, are shown in the following table:
+
+
+```{r worstcontrtointer, results='asis'}
+dftemp <- dfind %>% arrange(WLRatio, Performance)
+print(xtable(head(dftemp[, c(1, 3, 11:13, 5, 14:16)], 10)), type = "html")
+```
+<br>
+
+#### **Top performers for interclubs**
+
+The following chart shows the top performing clubs for the interclubs encounters, i.e. the number of earned points over the season over the initial rankings. The performance is expressed in raw figures and not in percent:
+
+```{r perfbyclubinter, results='markup', fig.height=4, fig.width=7}
+dftemp <- tbl_df(dfglob)
+dftemp <- merge(dftemp, clubs[, 1:3], by = "Club")
+dftemp$Club <- factor(dftemp$Club, levels = dftemp$Club, ordered = TRUE)
+ggplot(dftemp, aes(x = reorder(Club, Performance), y = Performance, fill = Club)) +
+        geom_bar(stat = "identity") +
+        geom_text(aes(y = Performance, label = Performance), size = 3) +
+        guides(fill = guide_legend(ncol = 2)) +
+        labs(x = "", y = "", title = "Performance by Club for Interclubs") +
+        scale_fill_manual(values = dftemp$Colour) +
+        coord_flip() +
+        theme(panel.background = element_rect(fill = "white", colour = "black"),
+              text = element_text(size = 10),
+              legend.text = element_text(size = 8),
+              legend.key.size = unit(0.5, "cm"))
+```
+
+
+#### **Floating or sinking?**
+
+The following chart displays the clubs according to their Win / Loss Ratio, calculated at the clubs' levels, as done for the individual players' levels. Again here, clubs with a Win / Loss Ratio above 1 have won more encounters than lost ones. And symmetrically, those with a ratio below 1, have lost more than won encounters. The vertical dotted line marks the "sea-level" limit of 1.
+
+```{r wlratiobyclubinter, results='markup', fig.height=4, fig.width=7}
+dftemp <- tbl_df(dfglob)
+dftemp <- merge(dftemp, clubs[, 1:3], by = "Club")
+dftemp$Club <- factor(dftemp$Club, levels = dftemp$Club, ordered = TRUE)
+ggplot(dftemp, aes(x = reorder(Club, WLRatio), y = WLRatio, fill = Club)) +
+        geom_bar(stat = "identity") +
+        geom_text(aes(y = WLRatio, label = WLRatio), size = 3) +
+        geom_hline(yintercept = 1, colour = "black", linetype = "dotted") +
+        guides(fill = guide_legend(ncol = 2)) +
+        labs(x = "", y = "", title = "Win/Loss Ratio by Club for Interclubs") +
+        scale_fill_manual(values = dftemp$Colour) +
+        coord_flip() +
+        theme(panel.background = element_rect(fill = "white", colour = "black"),
+              text = element_text(size = 10),
+              legend.text = element_text(size = 8),
+              legend.key.size = unit(0.5, "cm"))
+```
+
+
+#### **Above sea level?**
+
+This chart is quite similar to the previous one, as it displays a relationship between the wins and losses, but also, the size of the bubble indicates the volume of played matches. The bigger the bubble, the more played matches, and vice-versa. Again here, the diagonal dotted line, representing a line with `intercept` = `0` and `slope`= `1`, shows whether clubs had more wins than losses if above the line, or more losses than wins if below the line.
+
+```{r winslossesevents, results='markup', fig.height=5, fig.width=7}
+dftemp <- tbl_df(dfglob)
+dftemp <- merge(dftemp, clubs[, 1:3], by = "Club")
+dftemp$Club <- factor(dftemp$Club, levels = dftemp$Club, ordered = TRUE)
+ggplot(dftemp, aes(x = Loss, y = Win, size = Event, Label = Club, fill = Club)) +
+        geom_point(aes(size = Event), pch = 21, alpha = 0.75) +
+        geom_text(aes(size = Event, label = Club), size = 3, colour = "black") +
+        geom_abline(intercept = 0, slope = 1, linetype = "dotted") +
+        labs(x = "Losses", y = "Wins", title = "Wins, Losses and Events for Interclubs") +
+        scale_fill_manual(values = dftemp$Colour) +
+        scale_size(range = c(10, 38)) +
+        expand_limits(x = c(min(dftemp$Loss), max(dftemp$Loss) + 4),
+                      y = c(min(dftemp$Win) - 2, max(dftemp$Win) + 12)) +
+        theme(panel.background = element_rect(fill = "white", colour = "black"),
+              text = element_text(size = 10),
+              legend.position = "none")
+```
+
+---
+
+
+### Summary
+
+This study has been realised in `R` and `R Markdown`using the `RStudio` Integrated Development Environment. The main packages used for this data analysis are: `dplyr`, `ggplot2`, `reshape2` and, of course, `knitr`.
+
+Now that the **SR** 2014-2015 season is about to start, may this study's analyses and insights contribute to clubs managers, licensed players and interclubs team captains to adjust their tactics for a successful season.
